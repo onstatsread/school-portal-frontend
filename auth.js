@@ -1,6 +1,6 @@
 // ── Shared auth helpers — included in every dashboard page ──────────────────
 
-const API_BASE = "https://YOUR-APP-NAME.onrender.com"; // ← Same as index.html
+const API_BASE = "https://school-portal-api-55v4.onrender.com"; // ← Same as index.html
 
 function getToken()    { return localStorage.getItem("token"); }
 function getRole()     { return localStorage.getItem("role"); }
