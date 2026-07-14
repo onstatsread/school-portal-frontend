@@ -34,7 +34,8 @@
     .btn { background: linear-gradient(135deg, #1a237e, #1565c0); color: #fff; border: none;
       padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 600;
       cursor: pointer; width: 100%; margin-top: 4px; }
-    .msg { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 10px; display: none; }
+    .msg { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 10px;
+      display: none; border-radius: 8px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th { text-align: left; padding: 8px 10px; background: #e8eaf6; color: #1a237e; font-weight: 600; }
     td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
@@ -52,6 +53,7 @@
     <div class="nav-tab" id="tab-btn-subjects" onclick="switchTab('subjects')">Subjects</div>
     <div class="nav-tab" id="tab-btn-students" onclick="switchTab('students')">Add Student</div>
     <div class="nav-tab" id="tab-btn-teachers" onclick="switchTab('teachers')">Add Teacher</div>
+    <div class="nav-tab" id="tab-btn-assign" onclick="switchTab('assign')">Assign Teacher</div>
     <div class="nav-tab" id="tab-btn-parents" onclick="switchTab('parents')">Add Parent</div>
     <div class="nav-tab" id="tab-btn-users" onclick="switchTab('users')">All Users</div>
   </div>
@@ -123,6 +125,21 @@
       <input type="text" id="te-staffid" placeholder="Staff ID" />
       <button class="btn" onclick="createTeacher()">Add Teacher</button>
       <div class="msg" id="te-msg"></div>
+    </div>
+  </div>
+
+  <!-- ASSIGN TEACHER -->
+  <div class="tab-content" id="tab-assign">
+    <div class="card">
+      <h3>Assign Teacher to Subject & Class</h3>
+      <p style="font-size:13px;color:#666;margin-bottom:12px">
+        This tells the system which teacher teaches which subject in which class.
+      </p>
+      <select id="as-teacher"><option value="">— Select teacher —</option></select>
+      <select id="as-subject"><option value="">— Select subject —</option></select>
+      <select id="as-class"><option value="">— Select class —</option></select>
+      <button class="btn" onclick="assignTeacher()">Assign Teacher</button>
+      <div class="msg" id="as-msg"></div>
     </div>
   </div>
 
@@ -204,7 +221,8 @@
       document.getElementById("tab-btn-" + name).classList.add("active");
       if (name === "classes") loadClasses();
       if (name === "subjects") loadSubjects();
-      if (name === "students") loadClassDropdown();
+      if (name === "students") loadClassDropdown("st-class");
+      if (name === "assign") loadAssignDropdowns();
       if (name === "users") loadUsers();
     }
 
@@ -216,8 +234,7 @@
 
     async function loadStats() {
       const res = await apiFetch("/admin/stats");
-      if (!res) return;
-      if (!res.ok) { console.error("Stats failed:", res.status); return; }
+      if (!res || !res.ok) return;
       const d = await res.json();
       document.getElementById("s-students").textContent = d.total_students;
       document.getElementById("s-teachers").textContent = d.total_teachers;
@@ -229,44 +246,30 @@
     async function loadClasses() {
       document.getElementById("classList").textContent = "Loading...";
       const res = await apiFetch("/admin/classes");
-      if (!res || !res.ok) {
-        document.getElementById("classList").textContent = "Failed to load classes.";
-        return;
-      }
+      if (!res || !res.ok) { document.getElementById("classList").textContent = "Failed to load."; return; }
       const data = await res.json();
-      if (!data.length) {
-        document.getElementById("classList").innerHTML = "<p style='color:#888;font-size:13px'>No classes yet.</p>";
-        return;
-      }
+      if (!data.length) { document.getElementById("classList").innerHTML = "<p style='color:#888;font-size:13px'>No classes yet.</p>"; return; }
       document.getElementById("classList").innerHTML =
         "<table><tr><th>Class</th><th>Section</th></tr>" +
-        data.map(c => `<tr><td>${c.name}</td><td>${c.section}</td></tr>`).join("") +
-        "</table>";
+        data.map(c => `<tr><td>${c.name}</td><td>${c.section}</td></tr>`).join("") + "</table>";
     }
 
     async function loadSubjects() {
       document.getElementById("subjectList").textContent = "Loading...";
       const res = await apiFetch("/admin/subjects");
-      if (!res || !res.ok) {
-        document.getElementById("subjectList").textContent = "Failed to load subjects.";
-        return;
-      }
+      if (!res || !res.ok) { document.getElementById("subjectList").textContent = "Failed to load."; return; }
       const data = await res.json();
-      if (!data.length) {
-        document.getElementById("subjectList").innerHTML = "<p style='color:#888;font-size:13px'>No subjects yet.</p>";
-        return;
-      }
+      if (!data.length) { document.getElementById("subjectList").innerHTML = "<p style='color:#888;font-size:13px'>No subjects yet.</p>"; return; }
       document.getElementById("subjectList").innerHTML =
         "<table><tr><th>Subject</th><th>Code</th></tr>" +
-        data.map(s => `<tr><td>${s.name}</td><td>${s.code}</td></tr>`).join("") +
-        "</table>";
+        data.map(s => `<tr><td>${s.name}</td><td>${s.code}</td></tr>`).join("") + "</table>";
     }
 
-    async function loadClassDropdown() {
+    async function loadClassDropdown(selId) {
       const res = await apiFetch("/admin/classes");
       if (!res || !res.ok) return;
       const data = await res.json();
-      const sel = document.getElementById("st-class");
+      const sel = document.getElementById(selId);
       sel.innerHTML = "<option value=''>— Select class —</option>";
       data.forEach(c => {
         const opt = document.createElement("option");
@@ -276,17 +279,67 @@
       });
     }
 
-    async function loadUsers() {
-      const role = document.getElementById("filterRole") ? document.getElementById("filterRole").value : "";
-      const url = role ? "/admin/users?role=" + role : "/admin/users";
-      const res = await apiFetch(url);
-      if (!res || !res.ok) { document.getElementById("userTable").textContent = "Failed to load."; return; }
-      const data = await res.json();
-      if (!data.length) { document.getElementById("userTable").innerHTML = "<p style='color:#888;font-size:13px'>No users found.</p>"; return; }
-      document.getElementById("userTable").innerHTML =
-        "<table><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th></tr>" +
-        data.map(u => `<tr><td>${u.full_name}</td><td>${u.username}</td><td>${u.role}</td><td>${u.is_active ? "✅" : "🔴"}</td></tr>`).join("") +
-        "</table>";
+    async function loadAssignDropdowns() {
+      // Load teachers
+      const tRes = await apiFetch("/admin/users?role=teacher");
+      if (tRes && tRes.ok) {
+        const teachers = await tRes.json();
+        const tSel = document.getElementById("as-teacher");
+        tSel.innerHTML = "<option value=''>— Select teacher —</option>";
+        teachers.forEach(t => {
+          const opt = document.createElement("option");
+          opt.value = t.id;
+          opt.textContent = t.full_name + " (" + t.username + ")";
+          tSel.appendChild(opt);
+        });
+      }
+
+      // Load subjects
+      const sRes = await apiFetch("/admin/subjects");
+      if (sRes && sRes.ok) {
+        const subjects = await sRes.json();
+        const sSel = document.getElementById("as-subject");
+        sSel.innerHTML = "<option value=''>— Select subject —</option>";
+        subjects.forEach(s => {
+          const opt = document.createElement("option");
+          opt.value = s.id;
+          opt.textContent = s.name;
+          sSel.appendChild(opt);
+        });
+      }
+
+      // Load classes
+      await loadClassDropdown("as-class");
+    }
+
+    async function assignTeacher() {
+      const teacherUserId = parseInt(document.getElementById("as-teacher").value);
+      const subjectId = parseInt(document.getElementById("as-subject").value);
+      const classId = parseInt(document.getElementById("as-class").value);
+
+      if (!teacherUserId || !subjectId || !classId) {
+        showMsg("as-msg", "Please select teacher, subject and class.", true); return;
+      }
+
+      // We need teacher profile id, not user id
+      // Get teacher id from users list - the API assign-teacher needs teacher_id not user_id
+      // First get all teachers to find the teacher.id
+      const allUsers = await apiFetch("/admin/users?role=teacher");
+      if (!allUsers || !allUsers.ok) { showMsg("as-msg", "Failed to load teacher info.", true); return; }
+
+      const res = await apiFetch("/admin/assign-teacher", {
+        method: "POST",
+        body: JSON.stringify({
+          teacher_id: teacherUserId,
+          subject_id: subjectId,
+          class_id: classId
+        })
+      });
+
+      if (!res) { showMsg("as-msg", "Request failed.", true); return; }
+      const d = await res.json();
+      if (!res.ok) { showMsg("as-msg", d.detail || "Error", true); return; }
+      showMsg("as-msg", "Teacher assigned successfully!");
     }
 
     async function createClass() {
@@ -294,13 +347,14 @@
       const section = document.getElementById("cls-section").value.trim();
       if (!name || !section) { showMsg("cls-msg", "Fill in both fields.", true); return; }
       const res = await apiFetch("/admin/classes", { method: "POST", body: JSON.stringify({ name, section }) });
-      if (!res) { showMsg("cls-msg", "Request failed. Try again.", true); return; }
+      if (!res) { showMsg("cls-msg", "Request failed.", true); return; }
       const d = await res.json();
       if (!res.ok) { showMsg("cls-msg", d.detail || "Error", true); return; }
       showMsg("cls-msg", "Class " + d.name + " " + d.section + " created!");
       document.getElementById("cls-name").value = "";
       document.getElementById("cls-section").value = "";
       loadClasses();
+      loadStats();
     }
 
     async function createSubject() {
@@ -313,6 +367,7 @@
       if (!res.ok) { showMsg("subj-msg", d.detail || "Error", true); return; }
       showMsg("subj-msg", "Subject " + d.name + " added!");
       loadSubjects();
+      loadStats();
     }
 
     async function createStudent() {
@@ -332,6 +387,7 @@
       const d = await res.json();
       if (!res.ok) { showMsg("st-msg", d.detail || "Error", true); return; }
       showMsg("st-msg", "Student created! Username: " + body.username);
+      loadStats();
     }
 
     async function createTeacher() {
@@ -342,11 +398,15 @@
         password: document.getElementById("te-password").value,
         staff_id: document.getElementById("te-staffid").value.trim()
       };
+      if (!body.full_name || !body.username || !body.password || !body.staff_id) {
+        showMsg("te-msg", "Please fill all required fields.", true); return;
+      }
       const res = await apiFetch("/admin/create-teacher", { method: "POST", body: JSON.stringify(body) });
       if (!res) { showMsg("te-msg", "Request failed.", true); return; }
       const d = await res.json();
       if (!res.ok) { showMsg("te-msg", d.detail || "Error", true); return; }
       showMsg("te-msg", "Teacher created successfully!");
+      loadStats();
     }
 
     async function createParent() {
@@ -357,11 +417,28 @@
         password: document.getElementById("pa-password").value,
         phone: document.getElementById("pa-phone").value.trim()
       };
+      if (!body.full_name || !body.username || !body.password) {
+        showMsg("pa-msg", "Please fill required fields.", true); return;
+      }
       const res = await apiFetch("/admin/create-parent", { method: "POST", body: JSON.stringify(body) });
       if (!res) { showMsg("pa-msg", "Request failed.", true); return; }
       const d = await res.json();
       if (!res.ok) { showMsg("pa-msg", d.detail || "Error", true); return; }
       showMsg("pa-msg", "Parent created successfully!");
+      loadStats();
+    }
+
+    async function loadUsers() {
+      const role = document.getElementById("filterRole").value;
+      const url = role ? "/admin/users?role=" + role : "/admin/users";
+      const res = await apiFetch(url);
+      if (!res || !res.ok) { document.getElementById("userTable").textContent = "Failed to load."; return; }
+      const data = await res.json();
+      if (!data.length) { document.getElementById("userTable").innerHTML = "<p style='color:#888;font-size:13px'>No users found.</p>"; return; }
+      document.getElementById("userTable").innerHTML =
+        "<table><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th></tr>" +
+        data.map(u => `<tr><td>${u.full_name}</td><td>${u.username}</td><td>${u.role}</td><td>${u.is_active ? "✅" : "🔴"}</td></tr>`).join("") +
+        "</table>";
     }
   </script>
 </body>
